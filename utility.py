@@ -1,6 +1,8 @@
 import numpy as np
 import nltk
 
+# in .2d files, points are [y,x], and for x, left is positive, right is negative
+
 pi=3.1415926
 
 def parse_file(file_path):
@@ -14,11 +16,11 @@ def parse_file(file_path):
     robot_pos=list()
     for i in range(len(lines)):
         tokens=nltk.word_tokenize(lines[i])
-        if tokens[0]=="robot":
+        if tokens[0]=="robot" and nltk.word_tokenize(lines[i+3])[0]=="scan1":
             y=int(tokens[2])
-            x=int(tokens[3])
+            x=-int(tokens[3])
             theta=float(tokens[4])
-            theta=(-theta+90)/180*pi # translate robot heading to conventional angle
+            theta=(theta)/180*pi # translate robot heading to radius 
             pos=np.asarray([x,y,theta])
             robot_pos.append(pos)
         if tokens[0]=="scan1":
@@ -27,7 +29,7 @@ def parse_file(file_path):
             scan_l=list()
             for j in range(len(scans)//2):
                 y=int(scans[2*j])
-                x=int(scans[2*j+1])
+                x=-int(scans[2*j+1])
                 p=np.asarray([x,y])
                 scan_l.append(p)
             scan_l=np.stack(scan_l) # 181 x 2
@@ -52,7 +54,7 @@ def robot_to_global(points,robot_pos):
     R[0,1]=-sint
     R[1,0]=sint
     R[1,1]=cost
-    R=np.linalg.inv(R)
+    #R=np.linalg.inv(R)
     points_rotated=[np.matmul(R,p) for p in points]
     points_translated=[p+robot_pos[:2] for p in points_rotated]
     points=np.stack(points_translated)
@@ -65,8 +67,9 @@ def get_min_max_point(points,robot_pos):
     a list of point lists relative to robots_pos
     return [[x_min,y_min],[x_max,y_max]]
     '''
-    g_points=[robot_to_global(l,robot_pos) for l in points]
+    g_points=[robot_to_global(l,r) for (l,r) in zip(points,robot_pos)]
     g_points=np.stack(g_points) # scan_num x 181 x 2
+    print(g_points[:2])
     g_points=np.reshape(g_points,(-1,2))
     x_min_y_min=np.amin(g_points,axis=0) # 2
     x_max_y_max=np.amax(g_points,axis=0) # 2
@@ -154,3 +157,5 @@ if __name__ == '__main__':
     print(robpos.shape)
     print(points[0])
     print(robpos[:5])
+    g_limit=get_min_max_point(points,robpos)
+    print(g_limit)
