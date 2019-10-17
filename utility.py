@@ -1,5 +1,6 @@
 import numpy as np
 import nltk
+import cairo
 
 # in .2d files, points are [y,x], and for x, left is positive, right is negative
 
@@ -54,11 +55,22 @@ def robot_to_global(points,robot_pos):
     R[0,1]=-sint
     R[1,0]=sint
     R[1,1]=cost
-    #R=np.linalg.inv(R)
     points_rotated=[np.matmul(R,p) for p in points]
     points_translated=[p+robot_pos[:2] for p in points_rotated]
     points=np.stack(points_translated)
     return points
+
+def relative_robot_pos(robot_pos):
+    '''
+    robot_pos - [x,y,theta] 3
+    convert global robot pos to pos relative to last time
+    the first is just 0,0
+    '''
+    rel_pos=np.zeros_like(robot_pos)
+    for i in range(len(robot_pos)):
+        if i>0:
+            rel_pos[i]=robot_pos[i]-robot_pos[i-1]
+    return rel_pos
 
 def get_min_max_point(points,robot_pos):
     '''
@@ -91,17 +103,24 @@ def crate_map(g_limit,resolution):
     g_yrange=y_max-y_min
     m_xrange=np.round(g_xrange/resolution)
     m_yrange=np.round(g_yrange/resolution)
-    mmap=np.zeros((m_xrange,m_yrange))
-    return mmap
+    mmap=np.zeros((int(m_xrange),int(m_yrange)))
+    m_limit=np.zeros((2,2))
+    m_limit[0,0]=0
+    m_limit[0,1]=0
+    m_limit[1,0]=mmap.shape[0]-1
+    m_limit[1,1]=mmap.shape[1]-1
+    return mmap,m_limit
 
-def global_to_map(point,g_limit,m_limit):
+def global_to_map(points,g_limit,m_limit):
     '''
-    point - [x,y]
+    points - [[x,y]] 181 x 2
     g_limit - [[x_min,y_min],[x_max,y_max]] for global coord
     m_limit - [[x_min,y_min],[x_max,y_max]] for map coord
     convert a global point to a pixel location on map
     assume both have the same aspect ratio
     '''
+    x=points[:,0] # 181
+    y=points[:,1] # 181
     x_min=g_limit[0,0]
     x_max=g_limit[1,0]
     y_min=g_limit[0,1]
@@ -118,7 +137,23 @@ def global_to_map(point,g_limit,m_limit):
     x_m=np.clip(x_m,mx_min,mx_max)
     y_m=my_min+np.round((y-y_min)/g_yrange*m_yrange)
     y_m=np.clip(y_m,my_min,my_max)
-    return np.asarray([x_m,y_m])
+    m_points=np.stack([x_m,y_m],axis=1) # 181 x 2
+    return m_points
+
+def draw_map(mmap):
+    '''
+    output a png of drawn map for visualization
+    '''
+    w,h=mmap.shape
+    surface = cairo.ImageSurface(cairo.FORMAT_ARGB32,w*20,h*20)
+    ctx = cairo.Context(surface)
+    ctx.set_source_rgb(0.0, 0.0, 0.0)
+    for i in range(w):
+        for j in range(h):
+            if mmap[i][j]==1:
+                ctx.rectangle(i*20, j*20, 20, 20)
+                ctx.fill()
+    surface.write_to_png("map.png")
 
 
 def prob_to_logodds(prob):
@@ -159,3 +194,19 @@ if __name__ == '__main__':
     print(robpos[:5])
     g_limit=get_min_max_point(points,robpos)
     print(g_limit)
+    mmap,m_limit=crate_map(g_limit,20)
+    print(mmap.shape)
+    print(m_limit)
+    g_points=[robot_to_global(l,r) for (l,r) in zip(points,robpos)]
+    g_points=np.stack(g_points)
+    m_points=[global_to_map(p,g_limit,m_limit) for p in g_points]
+    m_points=np.stack(m_points)
+    print(m_points.shape)
+    for i in range(len(m_points)):
+        scan=m_points[i]
+        for j in range(len(scan)):
+            p=scan[j]
+            mmap[int(p[0]),int(p[1])]=1
+    print(mmap)
+    print(np.sum(mmap))
+    draw_map(mmap)

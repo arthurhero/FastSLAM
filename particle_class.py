@@ -1,22 +1,19 @@
 import numpy as np
-from numpy.random import normal
-from math import sin,cos
 from utility import *
-from resampling import resampling
 
 class particle:
     pose = np.array([0,0,0])
-    grid_map = np.matrix(np.ones((200,200)))
-    weight = 0.0
     probOcc = 0.9
     probFree = 0.35
-    gridSize = 0.05
+    prior=0.5
     logOddsPrior = prob_to_logOdds(prior)
+    gridSize = 20
 
-    def __init__(self,num_particles):
+    def __init__(self,num_particles,mmap):
 	self.weight = 1.0/num_particles	
-	prior = 0.5
-        self.grid_map = self.logOddsPrior*self.grid_map
+    self.grid_map = mmap
+    self.grid_map+=1.0
+    self.grid_map*=self.logOddsPrior
 
     def sample_motion_model(self,ut):
         # Inputs : ut = [v w]'
