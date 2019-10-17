@@ -21,7 +21,7 @@ def parse_file(file_path):
             y=int(tokens[2])
             x=-int(tokens[3])
             theta=float(tokens[4])
-            theta=(theta)/180*pi # translate robot heading to radius 
+            theta=(theta+90)/180*pi # translate robot heading to radius 
             pos=np.asarray([x,y,theta])
             robot_pos.append(pos)
         if tokens[0]=="scan1":
@@ -47,7 +47,7 @@ def robot_to_global(points,robot_pos):
     should be done after optimizing the localization
     return a new list of points [[x,y]] 181 x 2
     '''
-    theta=robot_pos[2]
+    theta=robot_pos[2]-pi/2
     sint=np.sin(theta)
     cost=np.cos(theta)
     R=np.zeros((2,2))
@@ -81,7 +81,7 @@ def get_min_max_point(points,robot_pos):
     '''
     g_points=[robot_to_global(l,r) for (l,r) in zip(points,robot_pos)]
     g_points=np.stack(g_points) # scan_num x 181 x 2
-    print(g_points[:2])
+    #print(g_points[:2])
     g_points=np.reshape(g_points,(-1,2))
     x_min_y_min=np.amin(g_points,axis=0) # 2
     x_max_y_max=np.amax(g_points,axis=0) # 2
@@ -113,7 +113,7 @@ def crate_map(g_limit,resolution):
 
 def global_to_map(points,g_limit,m_limit):
     '''
-    points - [[x,y]] 181 x 2
+    points - [[x,y]] 181 x 2 (181 can actually be any number)
     g_limit - [[x_min,y_min],[x_max,y_max]] for global coord
     m_limit - [[x_min,y_min],[x_max,y_max]] for map coord
     convert a global point to a pixel location on map
@@ -140,6 +140,33 @@ def global_to_map(points,g_limit,m_limit):
     m_points=np.stack([x_m,y_m],axis=1) # 181 x 2
     return m_points
 
+def map_to_global(points,g_limit,m_limit):
+    '''
+    points - [[x,y]] 181 x 2 (181 can actually be any number)
+    g_limit - [[x_min,y_min],[x_max,y_max]] for global coord
+    m_limit - [[x_min,y_min],[x_max,y_max]] for map coord
+    convert a map point to its global coord
+    assume both have the same aspect ratio
+    '''
+    x=points[:,0] # 181
+    y=points[:,1] # 181
+    x_min=g_limit[0,0]
+    x_max=g_limit[1,0]
+    y_min=g_limit[0,1]
+    y_max=g_limit[1,1]
+    mx_min=m_limit[0,0]
+    mx_max=m_limit[1,0]
+    my_min=m_limit[0,1]
+    my_max=m_limit[1,1]
+    g_xrange=x_max-x_min
+    g_yrange=y_max-y_min
+    m_xrange=mx_max-mx_min
+    m_yrange=my_max-my_min
+    x_g=x_min+(x-mx_min)/m_xrange*g_xrange
+    y_g=y_min+(y-my_min)/m_yrange*g_yrange
+    g_points=np.stack([x_g,y_g],axis=1) # 181 x 2
+    return g_points
+
 def draw_map(mmap):
     '''
     output a png of drawn map for visualization
@@ -155,6 +182,43 @@ def draw_map(mmap):
                 ctx.fill()
     surface.write_to_png("map.png")
 
+def ray_tracing(mmap,robot_pos,g_limit,m_limit):
+    '''
+    given the current constructed map and robot pose
+    computer the 181 points should be sensed by laser rangefinder
+    mmap - w x h
+    robot_pos - [x,y,theta]
+    g_limit - [[x_min,y_min],[x_max,y_max]] for global coord
+    m_limit - [[x_min,y_min],[x_max,y_max]] for map coord
+    '''
+    threshold=0.7
+    pi=3.1415926
+    scan=np.zeros((181,2))
+    pos_xy=np.expand_dims(robot_pos[:2],axis=0) # 1 x 2
+    mpos_xy=global_to_map(pos_xy,g_limit,m_limit)[0] # 2
+    theta=robot_pos[2] # current heading
+    x,y=mpos_xy[0],mpos_xy[1]
+    # scan from left to right for all 181 degrees
+    for i in range(0,181):
+        # scan from the location of the robot toward the edge of the map
+        dis=1.0
+        while True:
+            heading=theta+(90-i)/180*pi
+            loc_x=np.round(x+np.cos(heading)*dis)
+            loc_y=np.round(y+np.sin(heading)*dis)
+            if loc_x>=m_limit[1][0] or loc_y>=m_limit[1][1]:
+                # out of range of the map, no occlusion found
+                # set map boundary as occlusion
+                scan[i]=np.asarray([min(loc_x,m_limit[1][0]),min(loc_y,m_limit[1][1])])
+                break
+            elif mmap[int(loc_x)][int(loc_y)]>=threshold:
+                # occlusion found
+                scan[i]=np.asarray([loc_x,loc_y])
+                break
+            dis+=1.0
+    # convert scan to global coord
+    scan_g=map_to_global(scan,g_limit,m_limit)
+    return scan_g
 
 def prob_to_logodds(prob):
     ## Assuming that prob is a scalar
@@ -188,25 +252,29 @@ def v2t(v):
 
 if __name__ == '__main__':
     points,robpos=parse_file("jerodlab.2d")
-    print(points.shape)
-    print(robpos.shape)
-    print(points[0])
-    print(robpos[:5])
+    #print(points.shape)
+    #print(robpos.shape)
+    print("points:",points[0])
+    print(robpos[:1])
     g_limit=get_min_max_point(points,robpos)
-    print(g_limit)
+    #print(g_limit)
     mmap,m_limit=crate_map(g_limit,20)
-    print(mmap.shape)
-    print(m_limit)
+    #print(mmap.shape)
+    #print(m_limit)
     g_points=[robot_to_global(l,r) for (l,r) in zip(points,robpos)]
     g_points=np.stack(g_points)
+    print("g_points:",g_points[0])
     m_points=[global_to_map(p,g_limit,m_limit) for p in g_points]
     m_points=np.stack(m_points)
-    print(m_points.shape)
+    #print(m_points.shape)
     for i in range(len(m_points)):
         scan=m_points[i]
         for j in range(len(scan)):
             p=scan[j]
             mmap[int(p[0]),int(p[1])]=1
-    print(mmap)
-    print(np.sum(mmap))
-    draw_map(mmap)
+        if i>10:
+            break
+    #print(mmap)
+    #draw_map(mmap)
+    test_rt=ray_tracing(mmap,np.asarray([0.0,0.0,3.1415926/2]),g_limit,m_limit)
+    print("test:",test_rt)

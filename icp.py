@@ -1,13 +1,5 @@
 import numpy as np
 
-def ray_tracing(mmap,robot_pos):
-    '''
-    given the current constructed map and robot pose
-    computer the 181 points should be sensed by laser rangefinder
-    mmap - w x h
-    robot_pos - [x,y,theta]
-    '''
-
 def icp(xs,ps):
     '''
     perform iterative closest point scan-matching
