@@ -6,6 +6,25 @@ import cairo
 
 pi=3.1415926
 
+probOcc = 0.9
+probFree = 0.35
+prior=0.5
+threshold=0.7
+
+def prob_to_logodds(prob):
+    odds = prob/(1-prob)
+    logodds=np.log(odds)
+    return logodds
+
+def logodds_to_prob(logodds):
+    p = 1/(1+1/np.exp(logodds))
+    return p
+
+logoddsocc = prob_to_logodds(probOcc)
+logoddsfree = prob_to_logodds(probFree)
+logoddsprior = prob_to_logodds(prior)
+logoddsthreshold=prob_to_logodds(threshold)
+
 def parse_file(file_path):
     '''
     parse .2d file
@@ -62,9 +81,9 @@ def robot_to_global(points,robot_pos):
 
 def relative_robot_pos(robot_pos):
     '''
-    robot_pos - [x,y,theta] 3
+    robot_pos - [[x,y,theta]] scan_num x 3
     convert global robot pos to pos relative to last time
-    the first is just 0,0
+    the first is just 0,0,0
     '''
     rel_pos=np.zeros_like(robot_pos)
     for i in range(len(robot_pos)):
@@ -104,6 +123,7 @@ def crate_map(g_limit,resolution):
     m_xrange=np.round(g_xrange/resolution)
     m_yrange=np.round(g_yrange/resolution)
     mmap=np.zeros((int(m_xrange),int(m_yrange)))
+    mmap+=logoddsprior
     m_limit=np.zeros((2,2))
     m_limit[0,0]=0
     m_limit[0,1]=0
@@ -167,7 +187,7 @@ def map_to_global(points,g_limit,m_limit):
     g_points=np.stack([x_g,y_g],axis=1) # 181 x 2
     return g_points
 
-def draw_map(mmap):
+def draw_map(mmap,fname="map.png"):
     '''
     output a png of drawn map for visualization
     '''
@@ -177,10 +197,10 @@ def draw_map(mmap):
     ctx.set_source_rgb(0.0, 0.0, 0.0)
     for i in range(w):
         for j in range(h):
-            if mmap[i][j]==1:
+            if mmap[i][j]>=logoddsthreshold:
                 ctx.rectangle(i*20, j*20, 20, 20)
                 ctx.fill()
-    surface.write_to_png("map.png")
+    surface.write_to_png(fname)
 
 def ray_tracing(mmap,robot_pos,g_limit,m_limit):
     '''
@@ -191,8 +211,6 @@ def ray_tracing(mmap,robot_pos,g_limit,m_limit):
     g_limit - [[x_min,y_min],[x_max,y_max]] for global coord
     m_limit - [[x_min,y_min],[x_max,y_max]] for map coord
     '''
-    threshold=0.7
-    pi=3.1415926
     scan=np.zeros((181,2))
     pos_xy=np.expand_dims(robot_pos[:2],axis=0) # 1 x 2
     mpos_xy=global_to_map(pos_xy,g_limit,m_limit)[0] # 2
@@ -209,9 +227,10 @@ def ray_tracing(mmap,robot_pos,g_limit,m_limit):
             if loc_x>=m_limit[1][0] or loc_y>=m_limit[1][1]:
                 # out of range of the map, no occlusion found
                 # set map boundary as occlusion
+                # TODO: correctly handle out of range
                 scan[i]=np.asarray([min(loc_x,m_limit[1][0]),min(loc_y,m_limit[1][1])])
                 break
-            elif mmap[int(loc_x)][int(loc_y)]>=threshold:
+            elif mmap[int(loc_x)][int(loc_y)]>=logoddsthreshold:
                 # occlusion found
                 scan[i]=np.asarray([loc_x,loc_y])
                 break
@@ -219,36 +238,6 @@ def ray_tracing(mmap,robot_pos,g_limit,m_limit):
     # convert scan to global coord
     scan_g=map_to_global(scan,g_limit,m_limit)
     return scan_g
-
-def prob_to_logodds(prob):
-    ## Assuming that prob is a scalar
-    prob = np.matrix(prob,float)
-    logOdds = prob/(1+prob)
-    return np.asscalar(logOdds)
-
-def logOdds_to_prob(logOdds):
-    ## Assuming that logOdds is a matrix
-    p = 1 - 1/(1 + np.exp(logOdds))
-    return p
-
-def swap(a,b):
-    x,y = b,a
-    return x,y
-
-def pose_world_to_map(pntsWorld,gridSize):
-    pntsMap = [x/gridSize for x in pntsWorld]
-    return pntsMap
-
-def laser_world_to_map(laserEndPnts, gridSize):
-    pntsMap = laserEndPnts/gridSize
-    return pntsMap
-
-def v2t(v):
-    x = v[0]
-    y = v[1]
-    th = v[2]
-    trans = np.matrix([[cos(th), -sin(th), x],[sin(th), cos(th), y],[0, 0, 1]])
-    return trans
 
 if __name__ == '__main__':
     points,robpos=parse_file("jerodlab.2d")
@@ -271,7 +260,7 @@ if __name__ == '__main__':
         scan=m_points[i]
         for j in range(len(scan)):
             p=scan[j]
-            mmap[int(p[0]),int(p[1])]=1
+            mmap[int(p[0]),int(p[1])]=logoddsocc
         if i>10:
             break
     #print(mmap)

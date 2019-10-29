@@ -1,40 +1,18 @@
-import random
+from copy import deepcopy
+import numpy as np
 
-def ssum(k,particles):
-    sum = 0
-    for i in range(k+1):
-        sum = sum + particle_weights[i]
-    return sum
-
-def sus(particles):
-    f = 360
-    n = len(particles)
-    p = f/n
-    start = random.randint(0,p)
-    pointers = []
-    for i in range(n):
-        pointers.append(start + i*p)
-    return rws(pointers,particles)
-
-def rws(pointers,particles):
-    keep = []
-    for pointer in pointers:
-        k = 0
-        while (ssum(k,particles)) < pointer:
-            k += 1
-        keep.append(particles[k][4])
-    return keep
-
-#INPUT
-p1 = [0,0,0,1,1]
-p2 = [0,0,0,0,2]
-p3 = [0,0,0,0,3]
-particles = [p1,p2,p3]
-
-#Extracting Weights
-particle_weights = []
-for i in range(len(particles)):
-    particle_weights.append(particles[i][3]*360)
-
-#Resampling
-print sus(particles)
+def resampling(particles):
+    '''
+    particles - a list of particles
+    return a list of resampled particles
+    '''
+    weights=np.asarray([p.weight for p in particles]) # all the weights
+    # TODO: do not resample if weight variance is small
+    normalized_weights=weights/weights.sum()
+    resampled_freq=np.random.multinomial(len(particles),normalized_weights) # freq being resampled for each particle
+    resampled_particles=list()
+    for i in range(len(resampled_freq)):
+        f=resampled_freq[i]
+        for j in range(f):
+            resampled_particles.append(deepcopy(particles[i]))
+    return resampled_particles

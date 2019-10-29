@@ -1,98 +1,118 @@
 import numpy as np
 from utility import *
+from icp import icp
+from resampling import resampling
 
 class particle:
-    pose = np.array([0,0,0])
-    probOcc = 0.9
-    probFree = 0.35
-    prior=0.5
-    logOddsPrior = prob_to_logOdds(prior)
-    gridSize = 20
+    pos = np.zeros(3,)
 
-    def __init__(self,num_particles,mmap):
-	self.weight = 1.0/num_particles	
-    self.grid_map = mmap
-    self.grid_map+=1.0
-    self.grid_map*=self.logOddsPrior
+    def __init__(self,num_particles,mmap,g_limit,m_limit,motion_noise=3,theta_noise=3,laser_noise=1.5):
+        '''
+        num_particles - total number of particles existing
+        mmap - current map for this particle
+        g_limit - [[x_min,y_min],[x_max,y_max]] for global coord
+        m_limit - [[x_min,y_min],[x_max,y_max]] for map coord
+        motion_noise - sigma for motion in mm
+        theta_noise - sigma for theta in degree
+        laser_noise - sigma for laser in mm
+        '''
+        self.weight = 1.0/num_particles	
+        self.grid_map = mmap
+        self.g_limit=g_limit
+        self.m_limit=m_limit
+        self.motion_noise=motion_noise
+        self.theta_noise=theta_noise
+        self.laser_noise=laser_noise
 
-    def sample_motion_model(self,ut):
-        # Inputs : ut = [v w]'
-        #          x_pre = [x y theta]'
-        # v = 1
-        # w = 0
-        [v,w] = ut
-        [x,y,theta] = self.pose
-        a1 = 0.01
-        a2 = 0.01
-        a3 = 0.01
-        a4 = 0.01
-        a5 = 0.01
-        a6 = 0.01
-        del_t = 1
-        v_cap = v + sample(a1*v**2 + a2*w**2)
-        w_cap = w + sample(a3*v**2 + a4*w**2)
-        gamma_cap = sample(a5*v**2 + a6*w**2)
-        x_prime = x - (v_cap/w_cap)*sin(theta) + v_cap/w_cap*sin(theta + w_cap*del_t)
-        y_prime = y + (v_cap/w_cap)*cos(theta) - v_cap/w_cap*cos(theta + w_cap*del_t)
-        theta_prime = theta + w_cap*del_t + gamma_cap*del_t
-        xt = [x_prime, y_prime, theta_prime]
-        return xt
+    def update_pose(self,rel_pos,robscan,scan_match=False):
+        '''
+        rel_pos - 3, motion relative to self.pos
+        robscan - 181 x 2, actual sensor data relative to robot
+        scan_match - whether to perform scan_match or not
+        '''
+        x_noise=np.random.normal(loc=0.0,scale=self.motion_noise)
+        y_noise=np.random.normal(loc=0.0,scale=self.motion_noise)
+        t_noise=np.random.normal(loc=0.0,scale=self.theta_noise)
+        t_noise_rad=t_noise/180*pi
+        noises=[x_noise,y_noise,t_noise_rad]
+        new_pos=self.pos+rel_pos+noises
+        if not scan_match:
+            self.pos=new_pos
+            return
+        # perform scan-matching
+        ps=ray_tracing(self.grid_map,new_pos,self.g_limit,self.m_limit) # 181 x 2, supposed sensor data
+        scan=robot_to_global(robscan,new_pos)
+        R,t,E=icp(scan,ps)
+        if E>1.0:
+            self.pos=new_pos
+            return
+        xy_pos=np.expand_dims(new_pos[:2],axis=1) # 2 x 1
+        matched_pos=t+np.matmul(R,xy_pos) # 2 x 1
+        matched_pos_=np.zeros(3,)
+        matched_pos_[:2]=matched_pos[:,0]
+        matched_pos_[2]=new_pos[2]
+        self.pos=matched_pos_
+        return
 
-    def inv_sensor_model(self,scan):
-        ### "scan" has to be of type sensor_msgs/LaserScan message
-        ### Assume that scan is a python list
-        mapUpdate = np.zeros(np.shape(self.grid_map))
-        robMapPose = pose_world_to_map(self.pose[2],self.gridSize)
-        robTrans = v2t(self.pose)
-        laserEndPnts = laser_to_xy(scan)
-        laserEndPnts = robTrans*laserEndPnts # convert from laser – robot coords
-        laserEndPntsMapFrame = laser_world_to_map(laserEndPnts[:2],gridSize)
-    	
-        freeCells = []
-        for col in range(len(laserEndPntsMapFrame[0])):
-            [X,Y] = bresenham2(robMapPose[0], robMapPose[1],laserEndPointsMapFrame[0][col],laserEndPointsMapFrame[1][col])
-            freeCells.append([X,Y])
+    def update_weight(self,robscan):
+        '''
+        get weight according to the raytracing result
+        robscan - 181 x 2, actual sensor data relative to robot
+        '''
+        scan=robot_to_global(robscan,self.pos)
+        ps=ray_tracing(self.grid_map,self.pos,self.g_limit,self.m_limit) # 181 x 2, supposed sensor data
+        error=np.power(np.sum((scan-ps)**2),0.5)
+        weight = 1.0/(error + 1)
+        self.weight=weight
+        return 
 
-        for freeCell in freeCells:
-	    mapUpdate[freeCell[0]][freeCell[1]] = prob_to_logodds(self.probFree)
-        for endPnt in LaserEndPntsMapFrame.transpose():
-	    mapUpdate[endPnt[0]][endPnt[1]] = prob_to_logodds(self.probOcc)
-	return mapUpdate, robMapPose, laserEndPntsMapFrame
-
-    def observation_model(self,scan):
-        zt = scan.ranges
-        d = raytrace(scan,self.pose,self.grid_map)
-        weight = 1.0/(np.linalg.norm(zt-d) + 1)
-        return weight
-
-    def raytrace(self,scan,pos,particle_map):
-	thresh_occ = 0.75
-        x,y,theta = pos[0],pos[1],pos[2]
-        ang_min = theta + scan.angle_min
-        ang_max = theta + scan.angle_max
-        angle_increment = scan.angle_increment
-        distances = []
-        for i in np.arange(ang_min,ang_max,angle_increment):
-            for n in range(1,int(scan.range_max/self.grid_size)):
-                x_pos = int(np.round(x + n*self.grid_size*np.cos(i)))
-                y_pos = int(np.round(y + n*self.grid_size*np.sin(i)))
-                if particle_map[x_pos][y_pos] > thresh_occ:
-    	  	    distances.append(np.linalg.norm([x_pos-x,y_pos-y]))
+    def update_map(self,robscan):
+        '''
+        update map according to the raytracing result
+        scan - 181 x 2, actual sensor data relative to robot
+        '''
+        update_map=np.zeros(np.shape(self.grid_map))
+        update_map+=logoddsprior
+        pos_xy=np.expand_dims(self.pos[:2],axis=0) # 1 x 2
+        mpos_xy=global_to_map(pos_xy,self.g_limit,self.m_limit)[0] # 2
+        scan=robot_to_global(robscan,self.pos)
+        map_scan=global_to_map(scan,self.g_limit,self.m_limit) # 181 x 2
+        for ms in map_scan:
+            theta=np.arctan((ms[1]-mpos_xy[1])/(ms[0]-mpos_xy[0]))
+            dis=np.power(np.sum((ms-mpos_xy)**2),0.5)
+            cur_dis=0.0
+            while cur_dis<dis:
+                cur_x=mpos_xy[0]+np.round(np.cos(theta)*cur_dis)
+                cur_y=mpos_xy[1]+np.round(np.sin(theta)*cur_dis)
+                if cur_x >= self.m_limit[0][0] and cur_x <= self.m_limit[1][0]\
+                        and cur_y >= self.m_limit[0][1] and cur_y <= self.m_limit[1][1]:
+                    update_map[int(cur_x),int(cur_y)]=logoddsfree
+                    cur_dis+=1.0
+                else:
                     break
-                elif n == int(scan.range_max/self.grid_size):
-                    distances.append('OOR')
-        return distances
+            if ms[0]>=self.m_limit[0][0] and ms[0]<=self.m_limit[1][0]\
+                    and ms[1]>=self.m_limit[0][1] and ms[1]<=self.m_limit[1][1]:
+                update_map[int(ms[0]),int(ms[1])]=logoddsocc
+        self.grid_map-=logoddsprior
+        self.grid_map+=update_map
+        return
 
 if __name__ == '__main__':
     num_particles = 30
-    particles = [particle(num_particles) for i in range(num_particles)]
-    while(not ut.end):
-    ### ut, scan = Subscribe to topics to get twist and laser scan after delta_t
-        for i in range(num_particles):
-	    particles[i].pose = particles[i].sample_motion_model(ut)
-    	    particles[i].weight = observation_model(scan)
-            [mapUpdate, robPoseMap, laserEndPntsMapFrame] = inverse_sensor_model(scan)
-	    particles[i].grid_map -= logOddsPrior	
-	    particles[i].grid_map += mapUpdate
-	    plot_map(particles[i].grid_map,robPoseMap, laserEndPntsMapFrame, particles[i].gridSize)
-	particles = resampling(particles)
+    robscan,robpos=parse_file("jerodlab.2d")
+    g_limit=get_min_max_point(robscan,robpos)
+    mmap,m_limit=crate_map(g_limit,20)
+    rel_robpos=relative_robot_pos(robpos)
+
+    particles = [particle(num_particles,mmap,g_limit,m_limit) for i in range(num_particles)]
+
+    for i in range(len(robscan)):
+        for j in range(num_particles):
+            if i>0:
+                particles[j].update_pose(rel_robpos[i],robscan[i],scan_match=False)
+                particles[j].update_weight(robscan[i])
+            particles[j].update_map(robscan[i])
+        if i>0:
+            particles = resampling(particles)
+
+    draw_map(particles[0].grid_map,"naive_fastslam.png")
