@@ -7,6 +7,11 @@ def resampling(particles):
     return a list of resampled particles
     '''
     weights=np.asarray([p.weight for p in particles]) # all the weights
+    if -1 in weights:
+        return particles
+    #poses=np.asarray([p.pos for p in particles]) # all the poses 
+    #print("weights:",weights)
+    #print("poses:",poses)
     # TODO: do not resample if weight variance is small
     normalized_weights=weights/weights.sum()
     resampled_freq=np.random.multinomial(len(particles),normalized_weights) # freq being resampled for each particle

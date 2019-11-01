@@ -11,6 +11,8 @@ probFree = 0.35
 prior=0.5
 threshold=0.7
 
+map_reso=50
+
 def prob_to_logodds(prob):
     odds = prob/(1-prob)
     logodds=np.log(odds)
@@ -109,7 +111,7 @@ def get_min_max_point(points,robot_pos):
     g_limit[1]=x_max_y_max
     return g_limit
 
-def crate_map(g_limit,resolution):
+def create_map(g_limit,resolution):
     '''
     given global coord limit and resulution, create a blank map
     g_limit - [[x_min,y_min],[x_max,y_max]]
@@ -154,9 +156,9 @@ def global_to_map(points,g_limit,m_limit):
     m_xrange=mx_max-mx_min
     m_yrange=my_max-my_min
     x_m=mx_min+np.round((x-x_min)/g_xrange*m_xrange)
-    x_m=np.clip(x_m,mx_min,mx_max)
+    #x_m=np.clip(x_m,mx_min,mx_max)
     y_m=my_min+np.round((y-y_min)/g_yrange*m_yrange)
-    y_m=np.clip(y_m,my_min,my_max)
+    #y_m=np.clip(y_m,my_min,my_max)
     m_points=np.stack([x_m,y_m],axis=1) # 181 x 2
     return m_points
 
@@ -216,6 +218,7 @@ def ray_tracing(mmap,robot_pos,g_limit,m_limit):
     mpos_xy=global_to_map(pos_xy,g_limit,m_limit)[0] # 2
     theta=robot_pos[2] # current heading
     x,y=mpos_xy[0],mpos_xy[1]
+    valid_index=list()
     # scan from left to right for all 181 degrees
     for i in range(0,181):
         # scan from the location of the robot toward the edge of the map
@@ -224,35 +227,37 @@ def ray_tracing(mmap,robot_pos,g_limit,m_limit):
             heading=theta+(90-i)/180*pi
             loc_x=np.round(x+np.cos(heading)*dis)
             loc_y=np.round(y+np.sin(heading)*dis)
-            if loc_x>=m_limit[1][0] or loc_y>=m_limit[1][1]:
+            if loc_x>m_limit[1][0] or loc_y>m_limit[1][1]\
+                    or loc_x<m_limit[0][0] or loc_y<m_limit[0][1]:
                 # out of range of the map, no occlusion found
-                # set map boundary as occlusion
                 # TODO: correctly handle out of range
-                scan[i]=np.asarray([min(loc_x,m_limit[1][0]),min(loc_y,m_limit[1][1])])
+                # do not mark this index as valid
+                scan[i]=np.asarray([0,0])
                 break
             elif mmap[int(loc_x)][int(loc_y)]>=logoddsthreshold:
                 # occlusion found
+                valid_index.append(i)
                 scan[i]=np.asarray([loc_x,loc_y])
                 break
             dis+=1.0
     # convert scan to global coord
     scan_g=map_to_global(scan,g_limit,m_limit)
-    return scan_g
+    return scan_g,valid_index
 
 if __name__ == '__main__':
     points,robpos=parse_file("jerodlab.2d")
     #print(points.shape)
     #print(robpos.shape)
-    print("points:",points[0])
-    print(robpos[:1])
+    #print("points:",points[0])
+    #print(robpos[:1])
     g_limit=get_min_max_point(points,robpos)
     #print(g_limit)
-    mmap,m_limit=crate_map(g_limit,20)
+    mmap,m_limit=create_map(g_limit,map_reso)
     #print(mmap.shape)
     #print(m_limit)
     g_points=[robot_to_global(l,r) for (l,r) in zip(points,robpos)]
     g_points=np.stack(g_points)
-    print("g_points:",g_points[0])
+    #print("g_points:",g_points[0])
     m_points=[global_to_map(p,g_limit,m_limit) for p in g_points]
     m_points=np.stack(m_points)
     #print(m_points.shape)
@@ -261,9 +266,13 @@ if __name__ == '__main__':
         for j in range(len(scan)):
             p=scan[j]
             mmap[int(p[0]),int(p[1])]=logoddsocc
+        '''
         if i>10:
             break
+            '''
     #print(mmap)
-    #draw_map(mmap)
+    draw_map(mmap,"baseline_map.png")
+    '''
     test_rt=ray_tracing(mmap,np.asarray([0.0,0.0,3.1415926/2]),g_limit,m_limit)
     print("test:",test_rt)
+    '''
