@@ -39,6 +39,8 @@ def icp(xs,ps,robpos):
         E+=e
     E/=len(xs)
     theta=np.arccos(R[0][0])
+    if R[0][0]<0: # if sint<0
+        theta*=(-1)
     return theta,t,E
 
 def get_error(a,b):
@@ -67,13 +69,13 @@ def search_best_angle(scan,mmap,robpos,g_limit,m_limit,mina,maxa,step):
     ps,valid_idx=ray_tracing(mmap,robpos,g_limit,m_limit)
     if len(valid_idx)<100:
         return 0.0
-    middle_idx=set(valid_idx).intersection(range(0-mina,181-maxa)) # get the middle scan
+    middle_idx=set(valid_idx).intersection(range(0-mina,182-maxa)) # get the middle scan
     middle_idx=list(middle_idx)
     ps_middle=ps[middle_idx]
     cur_error=get_error(ps_middle,scan[middle_idx])
     for t in range(mina,maxa,step):
         cur_index=[i+t for i in middle_idx]
-        rotated_ps_middle=rotate(ps_middle,t,robpos) #TODO
+        rotated_ps_middle=rotate(ps_middle,t,robpos)
         e=get_error(rotated_ps_middle,scan[cur_index])
         if e<cur_error:
             cur_error=e

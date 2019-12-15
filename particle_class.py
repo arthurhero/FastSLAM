@@ -44,8 +44,8 @@ class particle:
             return
         # perform scan-matching
         scan=robot_to_global(robscan,new_pos)
-        angle=search_best_angle(scan,self.grid_map,new_pos,self.g_limit,self.m_limit,-2,3,1)
-        print("angle:",angle)
+        angle=search_best_angle(scan,self.grid_map,new_pos,self.g_limit,self.m_limit,-1,2,1)
+        #print("angle:",angle)
         theta=angle*pi/180
         '''
         ps,valid_idx=ray_tracing(self.grid_map,new_pos,self.g_limit,self.m_limit) # 181 x 2, supposed sensor data
@@ -65,7 +65,7 @@ class particle:
         #self.pos=middle_pos
         self.pos=matched_pos_
         '''
-        new_pos[2]+=(theta/2.0)
+        new_pos[2]+=(theta*1.0)
         self.pos=new_pos
         return
 
@@ -92,8 +92,6 @@ class particle:
         update map according to the raytracing result
         scan - 181 x 2, actual sensor data relative to robot
         '''
-        update_map=np.zeros(np.shape(self.grid_map))
-        #update_map+=logoddsprior
         pos_xy=np.expand_dims(self.pos[:2],axis=0) # 1 x 2
         mpos_xy=global_to_map(pos_xy,self.g_limit,self.m_limit)[0] # 2
         scan=robot_to_global(robscan,self.pos)
@@ -108,22 +106,35 @@ class particle:
                     theta=-pi/2.0
             else:
                 theta=np.arctan((ms[1]-mpos_xy[1])/(ms[0]-mpos_xy[0]))
+                if (ms[0]-mpos_xy[0])<0:
+                    theta=pi+theta
+            #print("theta:",theta)
             dis=np.power(np.sum((ms-mpos_xy)**2),0.5)
             cur_dis=0.0
-            while cur_dis<dis:
+            while True:
                 cur_x=mpos_xy[0]+np.round(np.cos(theta)*cur_dis)
                 cur_y=mpos_xy[1]+np.round(np.sin(theta)*cur_dis)
                 if cur_x >= self.m_limit[0][0] and cur_x <= self.m_limit[1][0]\
                         and cur_y >= self.m_limit[0][1] and cur_y <= self.m_limit[1][1]:
-                    update_map[int(cur_x),int(cur_y)]=logoddsfree
+                    #inside the boundary
+                    if self.grid_map[int(cur_x)][int(cur_y)]>=logoddsthreshold:
+                        #if detected occlusion
+                        break # do not update
+                    if cur_dis<dis-0.5:
+                        self.grid_map[int(cur_x),int(cur_y)]+=logoddsfree
+                    elif cur_dis>dis+0.5:
+                        #unknown beyond the occlusion
+                        self.grid_map[int(cur_x),int(cur_y)]*=0.8
+                    else:
+                        self.grid_map[int(cur_x),int(cur_y)]+=logoddsocc
+                        break
+                        '''
+                        if self.grid_map[int(cur_x)][int(cur_y)]>(-logoddsthreshold):
+                            #if not detected free space
+                        '''
                     cur_dis+=1.0
                 else:
                     break
-            if ms[0]>=self.m_limit[0][0] and ms[0]<=self.m_limit[1][0]\
-                    and ms[1]>=self.m_limit[0][1] and ms[1]<=self.m_limit[1][1]:
-                update_map[int(ms[0]),int(ms[1])]=logoddsocc
-        #self.grid_map-=logoddsprior
-        self.grid_map+=update_map
         return
 
 if __name__ == '__main__':
@@ -146,11 +157,11 @@ if __name__ == '__main__':
             '''
                 '''
             if i>0 and j<4:
-                draw_map(particles[j].grid_map,"progress3/sm_fastslam_"+str(i)+"_"+str(j)+".png")
+                draw_map(particles[j].grid_map,"progress_sm_1_1_no_del/"+str(i)+"_"+str(j)+".png")
         '''
             '''
         if i>0:
             particles = resampling(particles)
 
     for i in range(num_particles):
-        draw_map(particles[i].grid_map,"icp/"+str(i)+".png")
+        draw_map(particles[i].grid_map,"sm1_1_no_del/"+str(i)+".png")

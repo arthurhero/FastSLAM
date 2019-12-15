@@ -6,7 +6,7 @@ import cairo
 
 pi=3.1415926
 
-probOcc = 0.9
+probOcc = 0.7
 probFree = 0.35
 prior=0.5
 threshold=0.7
