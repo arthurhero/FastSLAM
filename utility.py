@@ -1,24 +1,24 @@
 import numpy as np
-import nltk
-import cairo
+import nltk # for tokenize strings
+import cairo # for drawing the grid map
 
 # in .2d files, points are [y,x], and for x, left is positive, right is negative
 
 pi=3.1415926
 
-probOcc = 0.7
-probFree = 0.35
+probOcc = 0.7 # probability of occlusion when obstacle scanned
+probFree = 0.35 # probability of free space when obstacle not scanned
 prior=0.5
-threshold=0.7
-
-map_reso=50
+threshold=0.7 # threshold above which the grid is decided to be blocked
 
 def prob_to_logodds(prob):
+    # convert probability to log odds
     odds = prob/(1-prob)
     logodds=np.log(odds)
     return logodds
 
 def logodds_to_prob(logodds):
+    # convert log odds to probability
     p = 1/(1+1/np.exp(logodds))
     return p
 
@@ -65,7 +65,6 @@ def robot_to_global(points,robot_pos):
     points - [[x,y]] 181 x 2
     robot_pos - [x,y,theta] 3
     convert points relative to the robot to global
-    should be done after optimizing the localization
     return a new list of points [[x,y]] 181 x 2
     '''
     theta=robot_pos[2]-pi/2
@@ -219,19 +218,18 @@ def ray_tracing(mmap,robot_pos,g_limit,m_limit):
     theta=robot_pos[2] # current heading
     x,y=mpos_xy[0],mpos_xy[1]
     valid_index=list()
-    # scan from left to right for all 181 degrees
+    # scan from right to left for all 181 degrees
     for i in range(0,181):
         # scan from the location of the robot toward the edge of the map
         dis=1.0
         while True:
-            heading=theta+(90-i)/180*pi
+            heading=theta+(i-90)/180*pi
             loc_x=np.round(x+np.cos(heading)*dis)
             loc_y=np.round(y+np.sin(heading)*dis)
             if loc_x>m_limit[1][0] or loc_y>m_limit[1][1]\
                     or loc_x<m_limit[0][0] or loc_y<m_limit[0][1]:
                 # out of range of the map, no occlusion found
-                # TODO: correctly handle out of range
-                # do not mark this index as valid
+                # mark this index as invalid
                 scan[i]=np.asarray([0,0])
                 break
             elif mmap[int(loc_x)][int(loc_y)]>=logoddsthreshold:
@@ -252,6 +250,8 @@ if __name__ == '__main__':
     #print(robpos[:1])
     g_limit=get_min_max_point(points,robpos)
     #print(g_limit)
+
+    map_reso=50 # resolution of the grip map (mm)
     mmap,m_limit=create_map(g_limit,map_reso)
     #print(mmap.shape)
     #print(m_limit)

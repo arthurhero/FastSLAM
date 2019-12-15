@@ -10,6 +10,11 @@ def icp(xs,ps,robpos):
     ps being the points should be sensed given constructed map and current position - [[x,y]]
     robpos, robot's pos, [x,y]
     calculate a rotation matrix R and translation matrix t to transform from ps to xs
+
+    However, since when the robot has a slight position difference, the two sets of points
+    (should be scanned vs actually scanned) do not necessarily correspond to each other one by
+    one, we did not end up using icp as our scan-matching method. See search_best_angle below
+    for another alternative.
     '''
     robpos=np.expand_dims(robpos,axis=0) # 1 x 2
     xs-=robpos
@@ -48,6 +53,12 @@ def get_error(a,b):
     return error
 
 def rotate(ps,t,pos):
+    '''
+    auxiliary function for search_best_angle
+    ps - points to rotate
+    t - angle
+    pos - robot position, rotation center
+    '''
     t=t*pi/180
     pos=np.expand_dims(pos[:2],axis=0) # 1 x 2
     ps-=pos
@@ -65,22 +76,41 @@ def rotate(ps,t,pos):
     return ps
 
 def search_best_angle(scan,mmap,robpos,g_limit,m_limit,mina,maxa,step):
+    '''
+    try to rotate the robot a bit and find the best scan match
+    scan - actaul scan
+    mmap - the current map
+    robpos - current robot position
+    mina - integer, minimum rotation angle to try, 0 means no rotation, negative means right 
+    maxa - integer, maximum rotation angle to try (exclusive)
+    step - integer, angle step size
+    '''
     best_t=0.0
+    # get the theoretical scan
     ps,valid_idx=ray_tracing(mmap,robpos,g_limit,m_limit)
     if len(valid_idx)<100:
+        # if the valid scan is to small, do not rotate
         return 0.0
+    # choose a middle subset of valid indices so the robot has some room to rotate and compare
     middle_idx=set(valid_idx).intersection(range(0-mina,182-maxa)) # get the middle scan
     middle_idx=list(middle_idx)
     ps_middle=ps[middle_idx]
+    # current mis-match
     cur_error=get_error(ps_middle,scan[middle_idx])
     for t in range(mina,maxa,step):
-        cur_index=[i+t for i in middle_idx]
-        rotated_ps_middle=rotate(ps_middle,t,robpos)
+        # try through all the angles
+        # rotate the theoretical scan according to the angle
+        # for example, if robot is actually 2 degrees to the right,
+        # we rotate the theoretical scan 2 degrees to the left
+        rotated_ps_middle=rotate(ps_middle,-t,robpos)
+        # shift the index set according to the angle
+        cur_index=[i-t for i in middle_idx]
+        # get new mis-match
         e=get_error(rotated_ps_middle,scan[cur_index])
         if e<cur_error:
             cur_error=e
             best_t=t
-    return -best_t
+    return best_t
 
 
 if __name__ == '__main__':

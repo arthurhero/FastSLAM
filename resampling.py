@@ -8,6 +8,7 @@ def resampling(particles):
     '''
     weights=np.asarray([p.weight for p in particles]) # all the weights
     if -1 in weights:
+        # if we manually told the algorithm not to resample
         return particles
     #poses=np.asarray([p.pos for p in particles]) # all the poses 
     #print("weights:",weights)
