@@ -1,3 +1,6 @@
+import os
+from os import path
+
 from copy import deepcopy
 import numpy as np
 from utility import *
@@ -8,13 +11,21 @@ if __name__ == '__main__':
     # test code for any .2d file
     filename="jerodlab.2d"
     num_particles = 30
-    progress_folder = "progress_sm_1_1_no_del/"
-    result_folder = "sm1_1_no_del/"
+    result_folder = "sm1_1_greyscale/"
+    progress_folder = "progress_"+result_folder
     use_scan_match=True
     map_reso = 50 # resolution of the grip map (mm)
 
+    if not path.isdir(result_folder):
+        os.mkdir(result_folder)
+    if not path.isdir(progress_folder):
+        os.mkdir(progress_folder)
+
+    result_folder+='/'
+    progress_folder+='/'
+
     # prepare the data (robot position and scan history)
-    robscan,robpos=parse_file(filename)
+    robscan,robpos,valid_scan=parse_file(filename)
     g_limit=get_min_max_point(robscan,robpos)
     mmap,m_limit=create_map(g_limit,map_reso)
     rel_robpos=relative_robot_pos(robpos)
@@ -28,14 +39,14 @@ if __name__ == '__main__':
         for j in range(num_particles):
             if i>0:
                 # only update pose and weight after first round
-                particles[j].update_pose(rel_robpos[i],robscan[i],scan_match=True)
-                particles[j].update_weight(robscan[i])
-            particles[j].update_map(robscan[i])
+                particles[j].update_pose(rel_robpos[i],robscan[i],valid_scan[i],scan_match=True)
+                particles[j].update_weight(robscan[i],valid_scan[i])
+            particles[j].update_map(robscan[i],valid_scan[i])
             '''
                 '''
             # draw some map in progress
             if i>0 and j<4:
-                draw_map(particles[j].grid_map,progress_folder+str(i)+"_"+str(j)+".png")
+                draw_map(particles[j].grid_map,progress_folder+str(i)+"_"+str(j)+".png",greyscale=True)
         '''
             '''
         if i>0:
@@ -43,4 +54,4 @@ if __name__ == '__main__':
             particles = resampling(particles)
 
     for i in range(num_particles):
-        draw_map(particles[i].grid_map,result_folder+str(i)+".png")
+        draw_map(particles[i].grid_map,result_folder+'/'+str(i)+".png",greyscale=True)

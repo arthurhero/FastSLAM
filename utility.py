@@ -7,9 +7,10 @@ import cairo # for drawing the grid map
 pi=3.1415926
 
 probOcc = 0.7 # probability of occlusion when obstacle scanned
-probFree = 0.35 # probability of free space when obstacle not scanned
+probFree = 0.3 # probability of free space when obstacle not scanned
 prior=0.5
 threshold=0.7 # threshold above which the grid is decided to be blocked
+update_th=0.8 # if above this threshold, do not update the grid
 
 def prob_to_logodds(prob):
     # convert probability to log odds
@@ -26,16 +27,19 @@ logoddsocc = prob_to_logodds(probOcc)
 logoddsfree = prob_to_logodds(probFree)
 logoddsprior = prob_to_logodds(prior)
 logoddsthreshold=prob_to_logodds(threshold)
+logoddsupdate=prob_to_logodds(update_th)
 
 def parse_file(file_path):
     '''
     parse .2d file
     get a list of scans - [[[x,y]]] scan_num x 181 x 2
     a list of robot pos - [[x,y,theta]] scan_num x 3
+    a list of valid scan indices - [[idx]] scan_num x n
     '''
     lines=[line.rstrip('\n') for line in open(file_path)]
     points=list()
     robot_pos=list()
+    valid_idx=list()
     for i in range(len(lines)):
         tokens=nltk.word_tokenize(lines[i])
         if tokens[0]=="robot" and nltk.word_tokenize(lines[i+3])[0]=="scan1":
@@ -49,16 +53,21 @@ def parse_file(file_path):
             scans=tokens[2:]
             scans=[int(s) for s in scans] # (181 x 2)
             scan_l=list()
+            valid=list()
             for j in range(len(scans)//2):
                 y=int(scans[2*j])
                 x=-int(scans[2*j+1])
+                if y != 0 or x != 0:
+                    valid.append(j)
                 p=np.asarray([x,y])
                 scan_l.append(p)
+            scan_l.reverse()
             scan_l=np.stack(scan_l) # 181 x 2
             points.append(scan_l)
+            valid_idx.append(valid)
     points=np.stack(points) # scan_num x 181 x 2
     robot_pos=np.stack(robot_pos) # scan_num x 3
-    return points,robot_pos
+    return points,robot_pos,valid_idx
 
 def robot_to_global(points,robot_pos):
     '''
@@ -188,17 +197,25 @@ def map_to_global(points,g_limit,m_limit):
     g_points=np.stack([x_g,y_g],axis=1) # 181 x 2
     return g_points
 
-def draw_map(mmap,fname="map.png"):
+def draw_map(mmap,fname="map.png",greyscale=False):
     '''
     output a png of drawn map for visualization
     '''
     w,h=mmap.shape
+    maxv=logoddsocc*5
+    minv=logoddsfree*5
     surface = cairo.ImageSurface(cairo.FORMAT_ARGB32,w*20,h*20)
     ctx = cairo.Context(surface)
     ctx.set_source_rgb(0.0, 0.0, 0.0)
     for i in range(w):
         for j in range(h):
-            if mmap[i][j]>=logoddsthreshold:
+            if greyscale:
+                color=(mmap[i][j]-minv)/(maxv-minv)
+                color=1.0-color
+                ctx.set_source_rgb(color,color,color)
+                ctx.rectangle(i*20, j*20, 20, 20)
+                ctx.fill()
+            elif mmap[i][j]>=logoddsthreshold:
                 ctx.rectangle(i*20, j*20, 20, 20)
                 ctx.fill()
     surface.write_to_png(fname)

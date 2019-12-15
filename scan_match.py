@@ -75,10 +75,11 @@ def rotate(ps,t,pos):
     ps+=pos
     return ps
 
-def search_best_angle(scan,mmap,robpos,g_limit,m_limit,mina,maxa,step):
+def search_best_angle(scan,valid_scan,mmap,robpos,g_limit,m_limit,mina,maxa,step):
     '''
     try to rotate the robot a bit and find the best scan match
     scan - actaul scan
+    valid_scan - indices of valid scan
     mmap - the current map
     robpos - current robot position
     mina - integer, minimum rotation angle to try, 0 means no rotation, negative means right 
@@ -94,19 +95,25 @@ def search_best_angle(scan,mmap,robpos,g_limit,m_limit,mina,maxa,step):
     # choose a middle subset of valid indices so the robot has some room to rotate and compare
     middle_idx=set(valid_idx).intersection(range(0-mina,182-maxa)) # get the middle scan
     middle_idx=list(middle_idx)
-    ps_middle=ps[middle_idx]
+    valid=set(middle_idx).intersection(set(valid_scan))
+    valid=list(valid)
+    ps_middle=ps[valid]
     # current mis-match
-    cur_error=get_error(ps_middle,scan[middle_idx])
+    cur_error=get_error(ps_middle,scan[valid])
     for t in range(mina,maxa,step):
+        # shift the index set according to the angle
+        cur_index=[i-t for i in middle_idx]
+        valid=set(cur_index).intersection(set(valid_scan))
+        valid=list(valid)
+        valid_shift=[i+t for i in valid]
         # try through all the angles
         # rotate the theoretical scan according to the angle
         # for example, if robot is actually 2 degrees to the right,
         # we rotate the theoretical scan 2 degrees to the left
+        ps_middle=ps[valid_shift]
         rotated_ps_middle=rotate(ps_middle,-t,robpos)
-        # shift the index set according to the angle
-        cur_index=[i-t for i in middle_idx]
         # get new mis-match
-        e=get_error(rotated_ps_middle,scan[cur_index])
+        e=get_error(rotated_ps_middle,scan[valid])
         if e<cur_error:
             cur_error=e
             best_t=t
