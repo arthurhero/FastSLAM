@@ -11,10 +11,10 @@ if __name__ == '__main__':
     # test code for any .2d file
     filename="jerodlab.2d"
     num_particles = 30
-    result_folder = "sm1_1_greyscale/"
+    result_folder = "fine2/"
     progress_folder = "progress_"+result_folder
     use_scan_match=True
-    map_reso = 50 # resolution of the grip map (mm)
+    map_reso = 40 # resolution of the grip map (mm)
 
     if not path.isdir(result_folder):
         os.mkdir(result_folder)
@@ -54,4 +54,4 @@ if __name__ == '__main__':
             particles = resampling(particles)
 
     for i in range(num_particles):
-        draw_map(particles[i].grid_map,result_folder+'/'+str(i)+".png",greyscale=True)
+        draw_map(particles[i].grid_map,result_folder+'/'+str(i)+".png",greyscale=False)

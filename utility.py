@@ -215,7 +215,7 @@ def draw_map(mmap,fname="map.png",greyscale=False):
                 ctx.set_source_rgb(color,color,color)
                 ctx.rectangle(i*20, j*20, 20, 20)
                 ctx.fill()
-            elif mmap[i][j]>=logoddsthreshold:
+            elif mmap[i][j]>=logoddsupdate:
                 ctx.rectangle(i*20, j*20, 20, 20)
                 ctx.fill()
     surface.write_to_png(fname)
