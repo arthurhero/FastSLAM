@@ -15,10 +15,17 @@ Size of the map is bounded by the maximum and minimum scan coord in the scan his
 ## Files
 
 *slam.py*: the main code for running the slam algorithm
+
 *particle_class.py*: code for the particle class, including position update, map update, weight update
+
 *scan_match.py*: scan-match algorithms, including icp and a customized algorithm called `search_best_angle`
+
 *utility.py*: important utilities, including coord transfomation, map drawing, and ray tracing
+
 *jerodlab.2d*: a sample .2d laser log of jerod's lab
+
 *baseline_map.png*: a baseline map of jerod's lab constructed using only the laser log and without any slam correction
+
 *map_slam.png*: a map of jerod's lab constructed using slam
+
 *construction_history*: a folder containing the construction history of the slam map
