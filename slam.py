@@ -11,7 +11,7 @@ if __name__ == '__main__':
     # test code for any .2d file
     filename="jerodlab.2d"
     num_particles = 30
-    result_folder = "fine2/"
+    result_folder = "slam"
     progress_folder = "progress_"+result_folder
     use_scan_match=True
     map_reso = 40 # resolution of the grip map (mm)
@@ -39,7 +39,7 @@ if __name__ == '__main__':
         for j in range(num_particles):
             if i>0:
                 # only update pose and weight after first round
-                particles[j].update_pose(rel_robpos[i],robscan[i],valid_scan[i],scan_match=True)
+                particles[j].update_pose(rel_robpos[i],robscan[i],valid_scan[i],scan_match=use_scan_match)
                 particles[j].update_weight(robscan[i],valid_scan[i])
             particles[j].update_map(robscan[i],valid_scan[i])
             '''

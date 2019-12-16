@@ -51,7 +51,7 @@ class particle:
             return
         # perform scan-matching
         scan=robot_to_global(robscan,new_pos)
-        angle=search_best_angle(scan,valid_scan,self.grid_map,new_pos,self.g_limit,self.m_limit,-2,3,1)
+        angle=search_best_angle(scan,valid_scan,self.grid_map,new_pos,self.g_limit,self.m_limit,-1,2,1)
         #print("angle:",angle)
         theta=angle*pi/180
         new_pos[2]+=(theta*1.0)

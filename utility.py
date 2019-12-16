@@ -260,7 +260,7 @@ def ray_tracing(mmap,robot_pos,g_limit,m_limit):
     return scan_g,valid_index
 
 if __name__ == '__main__':
-    points,robpos=parse_file("jerodlab.2d")
+    points,robpos,valid_scan=parse_file("jerodlab.2d")
     #print(points.shape)
     #print(robpos.shape)
     #print("points:",points[0])
@@ -268,7 +268,7 @@ if __name__ == '__main__':
     g_limit=get_min_max_point(points,robpos)
     #print(g_limit)
 
-    map_reso=50 # resolution of the grip map (mm)
+    map_reso=40 # resolution of the grip map (mm)
     mmap,m_limit=create_map(g_limit,map_reso)
     #print(mmap.shape)
     #print(m_limit)
@@ -280,9 +280,10 @@ if __name__ == '__main__':
     #print(m_points.shape)
     for i in range(len(m_points)):
         scan=m_points[i]
-        for j in range(len(scan)):
+        vs=valid_scan[i]
+        for j in vs:
             p=scan[j]
-            mmap[int(p[0]),int(p[1])]=logoddsocc
+            mmap[int(p[0]),int(p[1])]+=logoddsocc
         '''
         if i>10:
             break
