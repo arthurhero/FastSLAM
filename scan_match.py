@@ -89,7 +89,7 @@ def search_best_angle(scan,valid_scan,mmap,robpos,g_limit,m_limit,mina,maxa,step
     best_t=0.0
     # get the theoretical scan
     ps,valid_idx=ray_tracing(mmap,robpos,g_limit,m_limit)
-    if len(valid_idx)<50:
+    if len(valid_idx)<100:
         # if the valid scan is to small, do not rotate
         return 0.0
     # choose a middle subset of valid indices so the robot has some room to rotate and compare
