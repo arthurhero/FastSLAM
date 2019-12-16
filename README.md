@@ -34,11 +34,11 @@ Size of the map is bounded by the maximum and minimum scan coord in the scan his
 
 ## Progress Demo
 
-###Baseline:
+### Baseline:
 
 <img src="baseline_map.png" alt="bl" width="400" height="400" />
 
-###SLAM:
+### SLAM:
 
 <img src="progress/1.png" alt="1" width="400" height="400" />
 
@@ -55,7 +55,7 @@ Size of the map is bounded by the maximum and minimum scan coord in the scan his
 <img src="map_slam.png" alt="sl" width="400" height="400" />
 
 
-###SLAM without Scan-Matching:
+### SLAM without Scan-Matching:
 
 <img src="progress_naive/1.png" alt="1" width="400" height="400" />
 
