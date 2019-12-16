@@ -211,6 +211,7 @@ def draw_map(mmap,fname="map.png",greyscale=False):
         for j in range(h):
             if greyscale:
                 color=(mmap[i][j]-minv)/(maxv-minv)
+                color=min(1.0,max(0.0,color))
                 color=1.0-color
                 ctx.set_source_rgb(color,color,color)
                 ctx.rectangle(i*20, j*20, 20, 20)
