@@ -11,8 +11,8 @@ if __name__ == '__main__':
     # test code for any .2d file
     filename="jerodlab.2d"
     num_particles = 30
-    result_folder = "slam"
-    progress_folder = "progress_"+result_folder
+    result_folder = "tmp"
+    progress_folder = result_folder+'_progress'
     use_scan_match=True
     map_reso = 40 # resolution of the grip map (mm)
 

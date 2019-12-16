@@ -1,7 +1,6 @@
 .DS_Store
 *.pyc
 #progress*/
-naive*/
-sm*/
+tmp*/
 icp/
 *.swp

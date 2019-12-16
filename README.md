@@ -70,3 +70,7 @@ Size of the map is bounded by the maximum and minimum scan coord in the scan his
 <img src="progress_naive/6.png" alt="6" width="400" height="400" />
 
 <img src="map_naive.png" alt="na" width="400" height="400" />
+
+## Warning
+
+Current code assume the angle increment is 1. Some code might need changes if angle increment is 0.5
